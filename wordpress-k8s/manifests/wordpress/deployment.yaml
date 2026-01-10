@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: wordpress-v2
+  labels:
+    app: wordpress
+    tier: frontend
+spec:
+  # 多副本配置 - 用于测试 Session Affinity
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wordpress
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: frontend
+        version: "6.4"
+    spec:
+      containers:
+      - name: wordpress
+        image: wordpress:6.4-apache
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+
+        # 环境变量 - 配置 WordPress 连接 MySQL
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: mysql:3306
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_DATABASE
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_USER
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_PASSWORD
+
+        # 资源限制
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+        # 存活探针 - 检查 Apache 进程
+        livenessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+            httpHeaders:
+            - name: Host
+              value: wordpress.local
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # 就绪探针 - 检查 WordPress 是否可以响应请求
+        readinessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+            httpHeaders:
+            - name: Host
+              value: wordpress.local
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # 挂载持久化存储
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wordpress-pvc

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: wordpress-v2
+  labels:
+    app: wordpress
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: wordpress
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+
+  # Session Affinity - 基于客户端 IP 的会话保持
+  # 确保同一客户端的请求总是路由到同一个 Pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 小时
